@@ -2,18 +2,18 @@
 
 Native Android chat client for **local uncensored LLMs** (Ollama / LM Studio).
 
-**Features**
-- Streaming chat (OpenAI-compatible `/v1/chat/completions`)
-- Whisper + system SpeechRecognizer voice input
-- Conversation history (Room)
-- Multiple server profiles (Tailscale 100.x.x.x ready)
-- Live model list
-- Material 3 + dynamic color + adaptive layouts
-- Optimized for low-latency Ollama
+**Repo:** https://github.com/Strobingn/AI_APP
 
-## Quick Start
+## Current Features
+- Real SSE streaming responses
+- Room conversation history
+- DataStore settings (server URL + model name)
+- Settings screen
+- Voice input (Android SpeechRecognizer) — Whisper structure ready
+- Material 3 + dynamic color
+- Tailscale-ready
 
-### 1. Desktop / Server (Ollama latency optimized)
+## Desktop / Server Setup (Low Latency)
 
 ```bash
 export OLLAMA_KEEP_ALIVE=-1
@@ -22,28 +22,31 @@ export OLLAMA_KV_CACHE_TYPE=q8_0
 ollama serve
 ```
 
-Load your uncensored model (e.g. `huihui_ai/gemma-4-abliterated:12b`).
+Load your uncensored model, e.g.:
+```bash
+ollama run huihui_ai/gemma-4-abliterated:12b
+```
 
-### 2. Tailscale
-Install Tailscale on desktop + phone. Note the desktop Tailscale IP (`100.x.x.x`).
+## Phone Setup
+1. Install Tailscale on phone + desktop
+2. Note desktop Tailscale IP (`100.x.x.x`)
+3. Build & install the APK (or download from Actions)
+4. Open app → Settings → paste `http://100.x.x.x:11434/v1`
+5. Set model name to whatever is loaded in Ollama
 
-### 3. Build the App
-
+## Build
 ```bash
 git clone https://github.com/Strobingn/AI_APP.git
 cd AI_APP
 ./gradlew assembleDebug
 ```
 
-Or push to trigger GitHub Actions and download the APK from Artifacts.
+Or just push and grab the APK from GitHub Actions artifacts.
 
-### 4. Configure in App
-Settings → Server URL: `http://100.x.x.x:11434/v1` (Ollama) or `:1234/v1` (LM Studio)
+## Next (when you get home)
+- Full on-device Whisper.cpp
+- Multi-conversation list
+- Image upload for multimodal
+- Model auto-discovery from /v1/models
 
-## Architecture
-- Kotlin + Jetpack Compose + Material 3
-- Retrofit + OkHttp (SSE streaming)
-- Room for history
-- SpeechRecognizer + Whisper-ready structure
-
-Built for maximum speed and privacy on your 12GB 4070 Ti + phone.
+Built for your 12GB 4070 Ti + phone. Keep expanding.

@@ -1,15 +1,24 @@
 package com.austin.aiapp.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.austin.aiapp.data.AppDatabase
 import com.austin.aiapp.data.ChatMessage
-import com.austin.aiapp.network.LlmApi
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import com.austin.aiapp.data.MessageEntity
+import com.austin.aiapp.data.PreferencesRepository
+import com.austin.aiapp.network.StreamingClient
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.UUID
 
-class ChatViewModel : ViewModel() {
+class ChatViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val prefs = PreferencesRepository(application)
+    private val db = AppDatabase.get(application)
+    private val dao = db.messageDao()
+
+    private val conversationId = UUID.randomUUID().toString()
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
@@ -20,12 +29,38 @@ class ChatViewModel : ViewModel() {
     private val _isStreaming = MutableStateFlow(false)
     val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
 
-    // Default to local Ollama / LM Studio over Tailscale. Change in Settings later.
-    private var baseUrl = "http://100.x.x.x:11434/v1" // replace with your Tailscale IP
-    private val api = LlmApi.create(baseUrl)
+    private val _serverUrl = MutableStateFlow("http://100.x.x.x:11434/v1")
+    val serverUrl: StateFlow<String> = _serverUrl.asStateFlow()
+
+    private val _modelName = MutableStateFlow("gemma-4-abliterated")
+    val modelName: StateFlow<String> = _modelName.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            prefs.serverUrl.collect { _serverUrl.value = it }
+        }
+        viewModelScope.launch {
+            prefs.modelName.collect { _modelName.value = it }
+        }
+        // Load history if needed later
+    }
 
     fun onInputChange(text: String) {
         _inputText.value = text
+    }
+
+    fun updateServerUrl(url: String) {
+        viewModelScope.launch {
+            prefs.setServerUrl(url)
+            _serverUrl.value = url
+        }
+    }
+
+    fun updateModelName(name: String) {
+        viewModelScope.launch {
+            prefs.setModelName(name)
+            _modelName.value = name
+        }
     }
 
     fun sendMessage() {
@@ -38,26 +73,48 @@ class ChatViewModel : ViewModel() {
         _isStreaming.value = true
 
         viewModelScope.launch {
+            dao.insert(MessageEntity(
+                conversationId = conversationId,
+                role = "user",
+                content = text
+            ))
+
+            val assistantBuffer = StringBuilder()
+            _messages.value = _messages.value + ChatMessage(role = "assistant", content = "")
+
             try {
-                val response = api.chatCompletions(
-                    mapOf(
-                        "model" to "gemma-4-abliterated", // or whatever is loaded
-                        "messages" to _messages.value.map {
-                            mapOf("role" to it.role, "content" to it.content)
-                        },
-                        "stream" to false // switch to true + SSE later for full streaming
-                    )
-                )
-                val content = response.choices?.firstOrNull()?.message?.content ?: "No response"
-                _messages.value = _messages.value + ChatMessage(role = "assistant", content = content)
-            } catch (e: Exception) {
-                _messages.value = _messages.value + ChatMessage(
+                val client = StreamingClient(_serverUrl.value)
+                val history = _messages.value.dropLast(1).map { it.role to it.content }
+
+                client.streamChat(_modelName.value, history).collect { token ->
+                    assistantBuffer.append(token)
+                    val current = _messages.value.toMutableList()
+                    current[current.lastIndex] = ChatMessage(role = "assistant", content = assistantBuffer.toString())
+                    _messages.value = current
+                }
+
+                dao.insert(MessageEntity(
+                    conversationId = conversationId,
                     role = "assistant",
-                    content = "Error: ${e.message}\n\nCheck Tailscale IP and that Ollama/LM Studio is running."
+                    content = assistantBuffer.toString()
+                ))
+            } catch (e: Exception) {
+                val current = _messages.value.toMutableList()
+                current[current.lastIndex] = ChatMessage(
+                    role = "assistant",
+                    content = "Error: ${e.message}\n\nCheck Tailscale IP and that the server is running."
                 )
+                _messages.value = current
             } finally {
                 _isStreaming.value = false
             }
+        }
+    }
+
+    fun clearChat() {
+        _messages.value = emptyList()
+        viewModelScope.launch {
+            dao.clearConversation(conversationId)
         }
     }
 }

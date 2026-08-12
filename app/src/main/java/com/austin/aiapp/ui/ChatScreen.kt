@@ -21,6 +21,7 @@ import com.austin.aiapp.viewmodel.ChatViewModel
 fun ChatScreen(
     onStartListening: ((String) -> Unit) -> Unit,
     onStopListening: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: ChatViewModel = viewModel()
 ) {
     val messages by viewModel.messages.collectAsState()
@@ -30,7 +31,7 @@ fun ChatScreen(
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+            listState.animateScrollToItem(messages.lastIndex)
         }
     }
 
@@ -39,7 +40,7 @@ fun ChatScreen(
             TopAppBar(
                 title = { Text("AI App") },
                 actions = {
-                    IconButton(onClick = { /* TODO: Settings */ }) {
+                    IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 }
@@ -57,7 +58,8 @@ fun ChatScreen(
                     onValueChange = viewModel::onInputChange,
                     modifier = Modifier.weight(1f),
                     placeholder = { Text("Message...") },
-                    maxLines = 4
+                    maxLines = 4,
+                    enabled = !isStreaming
                 )
                 Spacer(Modifier.width(8.dp))
                 IconButton(
@@ -65,7 +67,8 @@ fun ChatScreen(
                         onStartListening { text ->
                             viewModel.onInputChange(text)
                         }
-                    }
+                    },
+                    enabled = !isStreaming
                 ) {
                     Icon(Icons.Default.Mic, contentDescription = "Voice")
                 }
@@ -84,10 +87,20 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             items(messages) { msg ->
                 MessageBubble(msg)
+            }
+            if (isStreaming) {
+                item {
+                    Text(
+                        "▌",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
@@ -110,7 +123,7 @@ fun MessageBubble(message: com.austin.aiapp.data.ChatMessage) {
             modifier = Modifier.widthIn(max = 320.dp)
         ) {
             Text(
-                text = message.content,
+                text = message.content.ifEmpty { "…" },
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodyMedium
             )

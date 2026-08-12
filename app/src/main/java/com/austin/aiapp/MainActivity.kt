@@ -16,8 +16,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.austin.aiapp.ui.ChatScreen
+import com.austin.aiapp.ui.SettingsScreen
 import com.austin.aiapp.ui.theme.AIAppTheme
+import com.austin.aiapp.viewmodel.ChatViewModel
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -48,13 +54,28 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    ChatScreen(
-                        onStartListening = { callback ->
-                            onResult = callback
-                            startListening()
-                        },
-                        onStopListening = { stopListening() }
-                    )
+                    val navController = rememberNavController()
+                    val viewModel: ChatViewModel = viewModel()
+
+                    NavHost(navController = navController, startDestination = "chat") {
+                        composable("chat") {
+                            ChatScreen(
+                                onStartListening = { callback ->
+                                    onResult = callback
+                                    startListening()
+                                },
+                                onStopListening = { stopListening() },
+                                onOpenSettings = { navController.navigate("settings") },
+                                viewModel = viewModel
+                            )
+                        }
+                        composable("settings") {
+                            SettingsScreen(
+                                onBack = { navController.popBackStack() },
+                                viewModel = viewModel
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -69,9 +90,7 @@ class MainActivity : ComponentActivity() {
                     override fun onRmsChanged(rmsdB: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
-                    override fun onError(error: Int) {
-                        // Fallback silent
-                    }
+                    override fun onError(error: Int) {}
                     override fun onResults(results: Bundle?) {
                         val text = results
                             ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
